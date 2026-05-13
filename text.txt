@@ -1,0 +1,297 @@
+All things using terraform
+
+provider "aws" {
+  region = "ap-south-1"
+}
+ 
+# ---------------- VPC ----------------
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+}
+ 
+# ---------------- Subnets ----------------
+resource "aws_subnet" "public_subnet" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "ap-south-1a"
+}
+ 
+resource "aws_subnet" "private_subnet" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "ap-south-1b"
+}
+ 
+# ---------------- Internet Gateway ----------------
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+}
+ 
+# ---------------- Route Table ----------------
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+}
+ 
+resource "aws_route" "internet_access" {
+  route_table_id         = aws_route_table.public_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw.id
+}
+ 
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_rt.id
+}
+ 
+# ---------------- Security Group ----------------
+resource "aws_security_group" "web_sg" {
+  name   = "web-security-group"
+  vpc_id = aws_vpc.main.id
+ 
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ 
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ 
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+ 
+# ---------------- EC2 ----------------
+resource "aws_instance" "web" {
+  ami                    = "ami-0f559c3642608c138"
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+ 
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install httpd -y
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Terraform Web Server</h1>" > /var/www/html/index.html
+              EOF
+}
+ 
+# ---------------- DB Subnet Group ----------------
+resource "aws_db_subnet_group" "db_subnet" {
+  name = "db-subnet-group"
+ 
+  subnet_ids = [
+    aws_subnet.public_subnet.id,
+    aws_subnet.private_subnet.id
+  ]
+}
+ 
+# ---------------- RDS ----------------
+resource "aws_db_instance" "mysql_db" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  instance_class       = "db.t4g.micro"
+  db_name              = "terraformdb"
+  username             = "admin"
+  password             = "Password123!"
+ 
+  db_subnet_group_name = aws_db_subnet_group.db_subnet.name
+ 
+  skip_final_snapshot  = true
+  publicly_accessible  = true
+}
+
+
+
+----------------EC2 server ----------------
+
+resource "aws_security_group" "web_sg" {
+  name = "web-sg"
+  ingress { from_port=80; to_port=80; protocol="tcp"; cidr_blocks=["0.0.0.0/0"] }
+  egress  { from_port=0;  to_port=0;  protocol="-1";  cidr_blocks=["0.0.0.0/0"] }
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-0f559c3642608c138" 
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum install -y httpd
+              systemctl start httpd
+              echo "Hello from EC2" > /var/www/html/index.html
+              EOF
+}
+
+
+----------------s3 bucket----------------
+resource "aws_s3_bucket" "my_bucket" {
+  bucket = "my-unique-terraform-bucket-2026" # Must be globally unique
+}
+
+resource "aws_s3_bucket_public_access_block" "block" {
+  bucket = aws_s3_bucket.my_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+
+----------------RDS Database----------------
+resource "aws_db_subnet_group" "db_sub" {
+  name       = "db-sub"
+  subnet_ids = [aws_subnet.pub.id, aws_subnet.priv.id]
+}
+
+resource "aws_db_instance" "db" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  instance_class       = "db.t4g.micro"
+  username             = "admin"
+  password             = "Password123!"
+  db_subnet_group_name = aws_db_subnet_group.db_sub.name
+  skip_final_snapshot  = true
+}
+
+----------------EC2 instance----------------
+resource "aws_instance" "web" {
+  ami           = "ami-0f559c3642608c138"
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.pub.id
+  vpc_security_group_ids = [aws_security_group.sg.id]
+  user_data     = "#!/bin/bash\nyum install httpd -y\nsystemctl start httpd"
+} 
+
+
+----- S3 Backend
+terraform {
+  backend "s3" {
+    bucket = "my-terraform-state-bucket-2026"
+    key    = "terraform.tfstate"
+    region = "ap-south-1"
+  }
+}
+
+provider "aws" { region = "ap-south-1" }
+
+resource "aws_s3_bucket" "state" { bucket = "my-terraform-state-bucket-2026" }
+
+resource "aws_s3_bucket_versioning" "v" {
+  bucket = aws_s3_bucket.state.id
+  versioning_configuration { status = "Enabled" }
+}
+
+--------Infrastructure Changes
+resource "aws_instance" "web" {
+  ami           = "ami-0f559c3642608c138"
+  instance_type = "t3.small"          # changed from t3.micro
+  tags = { Name = "web-v2" }          # added tag
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+}
+
+
+-------- Load Balancer (ALB)
+provider "aws" { region = "ap-south-1" }
+
+resource "aws_vpc" "main"        { cidr_block = "10.0.0.0/16" }
+resource "aws_internet_gateway" "igw" { vpc_id = aws_vpc.main.id }
+
+resource "aws_subnet" "a" {
+  vpc_id = aws_vpc.main.id; cidr_block = "10.0.1.0/24"
+  availability_zone = "ap-south-1a"; map_public_ip_on_launch = true
+}
+resource "aws_subnet" "b" {
+  vpc_id = aws_vpc.main.id; cidr_block = "10.0.2.0/24"
+  availability_zone = "ap-south-1b"; map_public_ip_on_launch = true
+}
+
+resource "aws_security_group" "sg" {
+  vpc_id = aws_vpc.main.id
+  ingress { from_port = 80; to_port = 80; protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
+  egress  { from_port = 0;  to_port = 0;  protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
+}
+
+resource "aws_instance" "web1" {
+  ami = "ami-0f559c3642608c138"; instance_type = "t3.micro"
+  subnet_id = aws_subnet.a.id; vpc_security_group_ids = [aws_security_group.sg.id]
+  user_data = "#!/bin/bash\nyum install -y httpd\nsystemctl start httpd\necho 'Server 1' > /var/www/html/index.html"
+}
+resource "aws_instance" "web2" {
+  ami = "ami-0f559c3642608c138"; instance_type = "t3.micro"
+  subnet_id = aws_subnet.b.id; vpc_security_group_ids = [aws_security_group.sg.id]
+  user_data = "#!/bin/bash\nyum install -y httpd\nsystemctl start httpd\necho 'Server 2' > /var/www/html/index.html"
+}
+
+resource "aws_lb" "alb" {
+  name = "app-alb"; load_balancer_type = "application"; internal = false
+  security_groups = [aws_security_group.sg.id]
+  subnets         = [aws_subnet.a.id, aws_subnet.b.id]
+}
+resource "aws_lb_target_group" "tg" {
+  name = "web-tg"; port = 80; protocol = "HTTP"; vpc_id = aws_vpc.main.id
+}
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.alb.arn; port = 80; protocol = "HTTP"
+  default_action { type = "forward"; target_group_arn = aws_lb_target_group.tg.arn }
+}
+resource "aws_lb_target_group_attachment" "w1" {
+  target_group_arn = aws_lb_target_group.tg.arn; target_id = aws_instance.web1.id; port = 80
+}
+resource "aws_lb_target_group_attachment" "w2" {
+  target_group_arn = aws_lb_target_group.tg.arn; target_id = aws_instance.web2.id; port = 80
+}
+
+output "alb_dns" { value = aws_lb.alb.dns_name }
+
+
+------------Resource Dependencies
+provider "aws" { region = "ap-south-1" }
+
+resource "aws_vpc"    "main" { cidr_block = "10.0.0.0/16" }
+resource "aws_subnet" "pub"  { vpc_id = aws_vpc.main.id; cidr_block = "10.0.1.0/24"; availability_zone = "ap-south-1a" }
+resource "aws_internet_gateway" "igw" { vpc_id = aws_vpc.main.id }
+
+resource "aws_security_group" "sg" {
+  vpc_id = aws_vpc.main.id
+  ingress { from_port = 80; to_port = 80; protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
+  egress  { from_port = 0;  to_port = 0;  protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
+}
+
+resource "aws_instance" "web" {
+  ami                    = "ami-0f559c3642608c138"
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.pub.id
+  vpc_security_group_ids = [aws_security_group.sg.id]
+  depends_on             = [aws_internet_gateway.igw]   # explicit dependency
+}
+
+
+
+-----------Zero-Downtime (lifecycle)
+resource "aws_instance" "web1" {
+  ami           = "ami-0f559c3642608c138"
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.a.id
+  vpc_security_group_ids = [aws_security_group.sg.id]
+
+  lifecycle {
+    create_before_destroy = true    # new instance created BEFORE old one is destroyed
+  }
+}

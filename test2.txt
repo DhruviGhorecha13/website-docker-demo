@@ -1,0 +1,214 @@
+Git Practical Guide
+Using Git Commands in VS Code
+Simple  •  Short  •  Easy to Learn
+
+⚙️  Setup: Connect Git in VS Code
+Before starting any practical, set up Git in VS Code once.
+
+Step 1 — Install Git
+Download and install Git from: https://git-scm.com/downloads
+During installation, keep all default settings and click Next.
+
+Step 2 — Open VS Code Terminal
+In VS Code, press Ctrl + ` (backtick) to open the integrated terminal.
+
+Step 3 — Set Your Identity (One-time)
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+
+# Verify your setup
+git config --list
+
+Step 4 — Check Git is Working
+git --version    # Should show: git version 2.x.x
+
+💡 VS Code also has a built-in Source Control panel (Ctrl+Shift+G). You can use both the terminal and this panel together.
+
+
+Practical 1 — Initialize and Track Files
+
+Definition: Initialize a Git repository and learn how files move from untracked → staged → committed.
+
+Steps & Commands
+#	Action	Git Command
+1	Create project folder	mkdir myproject && cd myproject
+2	Initialize Git repo	git init
+3	Create a file	echo Hello > app.txt
+4	Check status	git status
+5	Stage the file	git add app.txt
+6	Commit the file	git commit -m "first commit"
+7	Modify the file	echo World >> app.txt
+8	View differences	git diff
+9	Commit updated changes	git add app.txt && git commit -m "update app"
+
+💡 git status shows RED = unstaged, GREEN = staged. git diff shows line-by-line changes before staging.
+
+
+Practical 2 — Branching and Isolation
+
+Definition: A branch is an independent line of development. Changes in one branch do NOT affect another until merged.
+
+Steps & Commands
+#	Action	Git Command
+1	Create a dev branch	git branch dev
+2	Switch to dev branch	git checkout dev
+3	Make changes in dev	echo DevCode > dev.txt && git add . && git commit -m "dev work"
+4	Switch back to main	git checkout main
+5	Compare branches	git diff main dev
+6	Delete local branch	git branch -d dev
+7	List all branches	git branch -a
+
+💡 Shortcut: git checkout -b dev creates AND switches to the new branch in one command.
+
+
+Practical 3 — Merging and Conflict Handling
+
+Definition: Merging combines changes from one branch into another. A conflict occurs when both branches edited the same line.
+
+Part A — Fast-Forward Merge
+#	Action	Git Command
+1	Create & switch to dev	git checkout -b dev
+2	Make a commit in dev	echo feature > feat.txt && git add . && git commit -m "feature"
+3	Switch to main	git checkout main
+4	Merge dev into main	git merge dev
+
+Part B — Conflict Resolution
+#	Action	Git Command
+1	Edit same line in main	echo main_change > conflict.txt && git add . && git commit -m "main edit"
+2	Create dev and edit same	git checkout -b dev && echo dev_change > conflict.txt && git add . && git commit -m "dev edit"
+3	Switch to main, try merge	git checkout main && git merge dev
+4	Open file, fix conflict	code conflict.txt    # Edit manually, remove <<< === >>>
+5	Stage and commit resolved	git add conflict.txt && git commit -m "resolved conflict"
+
+💡 Conflict markers: <<<<<<< HEAD = your changes, >>>>>>> dev = incoming changes. Delete the markers and keep the correct code.
+
+
+Practical 4 — Working with Remote Repositories
+
+Definition: A remote repository (e.g. GitHub) is a copy of your repo stored online. You push to share and pull to receive changes.
+
+Steps & Commands
+#	Action	Git Command
+1	Add remote origin	git remote add origin https://github.com/user/repo.git
+2	View remotes	git remote -v
+3	Push to remote	git push -u origin main
+4	Clone a repository	git clone https://github.com/user/repo.git
+5	Fetch updates	git fetch origin
+6	Pull changes	git pull origin main
+7	Push changes	git push origin main
+
+💡 git fetch only downloads — it does NOT merge. git pull = fetch + merge in one step.
+
+
+Practical 5 — GitHub Collaboration Workflow
+
+Definition: The standard team workflow: create a feature branch → push it → open a Pull Request → review → merge.
+
+Steps & Commands
+#	Action	Git Command
+1	Create repo on GitHub	# Use GitHub.com → New Repository
+2	Push local code to remote	git push -u origin main
+3	Clone to another location	git clone https://github.com/user/repo.git repo2
+4	Create feature branch	git checkout -b feature/login
+5	Make commits	echo code > login.txt && git add . && git commit -m "add login"
+6	Push feature branch	git push origin feature/login
+7	Create Pull Request	# GitHub.com → Compare & Pull Request
+8	Merge Pull Request	# GitHub.com → Merge Pull Request button
+
+💡 After PR is merged on GitHub, run git pull origin main locally to sync your machine.
+
+
+Practical 6 — Undoing Changes & Recovery
+
+Definition: Git lets you safely undo mistakes at any stage — unstaged, staged, committed, or even pushed.
+
+Quick Reference Table
+#	Action	Git Command
+1	Undo unstaged changes	git checkout -- filename.txt
+2	Unstage a file	git reset HEAD filename.txt
+3	Amend last commit message	git commit --amend -m "new message"
+4	Soft reset (keep changes)	git reset --soft HEAD~1
+5	Mixed reset (default)	git reset --mixed HEAD~1
+6	Hard reset (delete changes)	git reset --hard HEAD~1
+7	Safe undo (shared branch)	git revert HEAD
+8	Recover lost commits	git reflog
+
+💡 Rule of thumb: Use git revert on shared/remote branches. Use git reset only on your local unpushed commits.
+
+
+Practical 7 — Feature Branch Workflow
+
+Definition: Incremental commits on a feature branch help track progress, and updating with latest develop keeps conflicts small.
+
+Steps & Commands
+#	Action	Git Command
+1	Create feature branch	git checkout -b feature/signup develop
+2	Make incremental commits	git add . && git commit -m "step 1"
+3	Push branch to remote	git push origin feature/signup
+4	Update with latest develop	git fetch origin && git merge origin/develop
+5	Merge back to develop	git checkout develop && git merge feature/signup
+6	Delete feature branch	git branch -d feature/signup && git push origin --delete feature/signup
+
+💡 Always pull the latest develop before merging back — this keeps your feature up to date and reduces conflicts.
+
+
+Practical 8 — Rollback Commits
+
+Definition: Rolling back means returning to a previous state. The method depends on whether the commit is local or already shared.
+
+Steps & Commands
+#	Action	Git Command
+1	View commit history	git log --oneline
+2	Identify commit to rollback	git log --oneline    # Note the hash e.g. a1b2c3d
+3	Reset local to prev commit	git reset --hard a1b2c3d
+4	Discard all local changes	git checkout -- .
+5	Revert for shared branch	git revert a1b2c3d
+6	Verify rollback	git log --oneline && git status
+
+💡 git log --oneline shows short hashes. Copy the first 7 characters of the hash to use in reset/revert commands.
+
+
+Practical 9 — Git Hooks for Automation
+
+Definition: Git hooks are scripts that run automatically before/after Git events like commit or push. They automate quality checks.
+
+Steps & Commands
+#	Action	Git Command
+1	Go to hooks folder	cd .git/hooks
+2	Create pre-commit hook	touch pre-commit && chmod +x pre-commit
+3	Edit hook in VS Code	code pre-commit
+4	Create pre-push hook	touch pre-push && chmod +x pre-push
+5	Test hook (make a commit)	git add . && git commit -m "test hooks"
+
+Sample pre-commit hook content
+#!/bin/sh
+echo "Running lint check..."
+# Add your lint command here, e.g.:
+# npx eslint . --ext .js
+echo "Lint passed! Proceeding with commit."
+
+💡 Hooks live in .git/hooks/ and are NOT tracked by Git. To share hooks with a team, store them in a /hooks folder and copy on setup.
+
+
+📋  Quick Command Reference
+
+Command	What it does
+git init	Create a new local repository
+git status	Show file states (untracked / staged / modified)
+git add <file>	Stage a file for commit
+git add .	Stage ALL changed files
+git commit -m "msg"	Save staged changes with a message
+git log --oneline	Show compact commit history
+git diff	Show unstaged changes
+git branch	List all branches
+git checkout -b name	Create and switch to new branch
+git merge branch	Merge branch into current branch
+git clone <url>	Copy a remote repo locally
+git push origin main	Upload commits to GitHub
+git pull origin main	Download and merge from GitHub
+git reset --hard	Discard all uncommitted changes
+git revert HEAD	Create undo commit safely
+git reflog	Show all recent HEAD positions
+
+
+— End of Git Practical Guide —
